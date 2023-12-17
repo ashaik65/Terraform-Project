@@ -1,0 +1,81 @@
+# roles/sonarqube/tasks/main.yml
+
+---
+- name: Download and install SonarQube
+  hosts: jenkins 
+  become: true
+
+  tasks:
+    - name: Create SonarQube group
+      ansible.builtin.group:
+        name: sonarqube
+        state: present
+
+    - name: Create SonarQube user
+      ansible.builtin.user:
+        name: sonarqube
+        group: sonarqube
+        createhome: yes
+        system: yes
+
+    - name: Create directory for SonarQube
+      ansible.builtin.file:
+        path: /opt/sonarqube
+        state: directory
+
+    - name: Install unzip package
+      ansible.builtin.package:
+        name: unzip
+        state: present
+
+    - name: Download SonarQube zip file
+      ansible.builtin.get_url:
+        url: "https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-9.9.3.79811.zip"
+        dest: /opt/sonarqube/sonarqube.zip
+
+    - name: Unzip SonarQube
+      ansible.builtin.unarchive:
+        src: /opt/sonarqube/sonarqube.zip
+        dest: /opt/sonarqube
+        remote_src: true
+
+    - name: Set permissions
+      ansible.builtin.file:
+        path: /opt/sonarqube
+        recurse: yes
+        owner: sonarqube
+        group: sonarqube
+
+    - name: Add SonarQube systemd service configuration
+      ansible.builtin.lineinfile:
+        path: /etc/systemd/system/sonarqube.service
+        create: yes
+        line: |
+          [Unit]
+          Description=SonarQube
+          After=syslog.target network.target
+
+          [Service]
+          Type=forking
+          ExecStart=/opt/sonarqube/sonarqube-9.9.3.79811/bin/linux-x86-64/sonar.sh start
+          ExecStop=/opt/sonarqube/sonarqube-9.9.3.79811/bin/linux-x86-64/sonar.sh stop
+          User=sonarqube
+          Group=sonarqube
+          Restart=always
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Start SonarQube service
+      ansible.builtin.service:
+        name: sonarqube
+        state: started
+
+    - name: Enable SonarQube service
+      ansible.builtin.service:
+        name: sonarqube
+        enabled: yes
+
+    - name: Check SonarQube service status
+      ansible.builtin.command:
+        cmd: "systemctl status sonarqube"
